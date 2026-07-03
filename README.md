@@ -62,6 +62,26 @@ table.xlsx
 
 这是最推荐的部署方式。部署完成后会得到一个 `https://xxx.streamlit.app` 链接，可以直接发给朋友。
 
+本项目已准备好的 GitHub 仓库：
+
+```text
+https://github.com/llxler/college-application
+```
+
+在 Streamlit Community Cloud 中填写：
+
+```text
+Repository: llxler/college-application
+Branch: main
+Main file path: app.py
+```
+
+也可以使用 “Paste GitHub URL” 填入：
+
+```text
+https://github.com/llxler/college-application/blob/main/app.py
+```
+
 1. 新建 GitHub 仓库。
 2. 上传整个项目目录，至少包含：
 
@@ -80,16 +100,17 @@ https://share.streamlit.io
 ```
 
 5. 使用 GitHub 登录并授权。
-6. 点击创建应用，选择你的仓库、分支和入口文件。
-7. 入口文件填写：
+6. 如果仓库是 private，需要在 GitHub 授权页允许 Streamlit 访问 `llxler/college-application`。
+7. 点击创建应用，选择你的仓库、分支和入口文件。
+8. 入口文件填写：
 
 ```text
 app.py
 ```
 
-8. Python 版本建议选择 `3.12` 或 `3.13`。
-9. 点击 Deploy，等待构建完成。
-10. 部署成功后复制生成的 `streamlit.app` 链接发给朋友。
+9. Python 版本可使用默认 `3.12`，也可以在 Advanced settings 中选择 `3.13`。
+10. 点击 Deploy，等待构建完成。
+11. 部署成功后复制生成的 `streamlit.app` 链接发给朋友。
 
 ### 方式二：Cloudflare Tunnel 临时分享
 
