@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pandas as pd
@@ -13,7 +14,15 @@ from admission_recommender import (
     load_workbook_data,
     recommend,
 )
-from admission_recommender.exporter import EXCEL_MIME, to_excel_bytes
+from admission_recommender.exporter import (
+    EXCEL_MIME,
+    JPG_MIME,
+    PDF_MIME,
+    build_export_stem,
+    to_excel_bytes,
+    to_jpg_bytes,
+    to_pdf_bytes,
+)
 
 DATA_PATH = Path(__file__).with_name("table.xlsx")
 BATCH_ORDER = [
@@ -33,6 +42,11 @@ REMARK_EXCLUDE_OPTIONS = [
     "国家专项计划",
     "护理类",
 ]
+EXPORT_FORMATS = {
+    "Excel": ("xlsx", EXCEL_MIME),
+    "PDF": ("pdf", PDF_MIME),
+    "JPG": ("jpg", JPG_MIME),
+}
 
 
 @st.cache_data(show_spinner=False)
@@ -40,10 +54,26 @@ def load_data() -> pd.DataFrame:
     return load_workbook_data(DATA_PATH)
 
 
+@st.cache_data(show_spinner=False)
+def create_export(result: pd.DataFrame, export_format: str) -> bytes:
+    if export_format == "PDF":
+        return to_pdf_bytes(result)
+    if export_format == "JPG":
+        return to_jpg_bytes(result)
+    return to_excel_bytes(result)
+
+
 def main() -> None:
-    st.set_page_config(page_title="志愿推荐筛选程序", layout="wide")
+    st.set_page_config(
+        page_title="志愿推荐筛选程序",
+        page_icon=":material/school:",
+        layout="wide",
+    )
     st.title("志愿推荐筛选程序")
-    st.warning("本系统仅基于往年投档线进行辅助筛选，不能替代官方招生计划和最终录取结果。")
+    st.warning(
+        "本系统仅基于往年投档线进行辅助筛选，不能替代官方招生计划和最终录取结果。",
+        icon=":material/info:",
+    )
 
     if not DATA_PATH.exists():
         st.error(f"未找到数据文件：{DATA_PATH}")
@@ -59,7 +89,7 @@ def main() -> None:
     incomplete_count = int((filtered["数据状态"] == "数据不完整").sum())
 
     result = recommend(filtered, request, thresholds)
-    render_result(result, len(filtered), incomplete_count)
+    render_result(result, len(filtered), incomplete_count, filters, request)
 
 
 def render_controls(data: pd.DataFrame) -> tuple[CandidateFilters, RecommendRequest, RecommendThresholds]:
@@ -91,7 +121,7 @@ def render_controls(data: pd.DataFrame) -> tuple[CandidateFilters, RecommendRequ
         )
         exclude_remark_keywords = st.multiselect("备注排除", REMARK_EXCLUDE_OPTIONS)
         per_level_limit = int(st.number_input("每档推荐数量", min_value=1, max_value=100, value=10, step=1))
-        thresholds = render_threshold_controls()
+        thresholds = render_rank_threshold_controls()
 
     filters = CandidateFilters(
         batch=batch,
@@ -111,49 +141,147 @@ def render_controls(data: pd.DataFrame) -> tuple[CandidateFilters, RecommendRequ
     return filters, request, thresholds
 
 
-def render_threshold_controls() -> RecommendThresholds:
-    with st.expander("推荐阈值"):
+def render_rank_threshold_controls() -> RecommendThresholds:
+    with st.expander("位次推荐阈值"):
         rank_rush_min = st.number_input("位次冲下限", value=-0.10, step=0.01, format="%.2f")
         rank_rush_max = st.number_input("位次冲上限", value=0.05, step=0.01, format="%.2f")
         rank_stable_min = st.number_input("位次稳下限", value=0.05, step=0.01, format="%.2f")
         rank_stable_max = st.number_input("位次稳上限", value=0.25, step=0.01, format="%.2f")
         rank_safe_min = st.number_input("位次保下限", value=0.25, step=0.01, format="%.2f")
-        score_rush_min = st.number_input("分数冲下限", value=-10.0, step=1.0)
-        score_rush_max = st.number_input("分数冲上限", value=5.0, step=1.0)
-        score_stable_min = st.number_input("分数稳下限", value=5.0, step=1.0)
-        score_stable_max = st.number_input("分数稳上限", value=20.0, step=1.0)
-        score_safe_min = st.number_input("分数保下限", value=20.0, step=1.0)
+        st.divider()
+        with st.popover("查看位次阈值说明", icon=":material/help:"):
+            st.markdown(
+                """
+                位次值越小，排名越靠前。系统按下面的比例判断“冲、稳、保”：
+
+                `位次差比例 =（往年投档位次 - 你的位次）/ 你的位次`
+
+                - 比例为正：你的位次优于往年投档位次。
+                - 比例为负：你的位次低于往年投档位次。
+                - 阈值使用小数填写，例如 `0.05` 代表 `5%`。
+
+                例如你的位次是 `10000`，某专业组往年投档位次是 `12000`，
+                位次差比例就是 `(12000 - 10000) / 10000 = 0.20`，即 `20%`。
+
+                默认规则：`-10%～5%` 为冲，`>5%～25%` 为稳，`>25%` 为保。
+                """
+            )
     return RecommendThresholds(
         rank_rush_min=rank_rush_min,
         rank_rush_max=rank_rush_max,
         rank_stable_min=rank_stable_min,
         rank_stable_max=rank_stable_max,
         rank_safe_min=rank_safe_min,
-        score_rush_min=score_rush_min,
-        score_rush_max=score_rush_max,
-        score_stable_min=score_stable_min,
-        score_stable_max=score_stable_max,
-        score_safe_min=score_safe_min,
     )
 
 
-def render_result(result: pd.DataFrame, filtered_count: int, incomplete_count: int) -> None:
+def render_result(
+    result: pd.DataFrame,
+    filtered_count: int,
+    incomplete_count: int,
+    filters: CandidateFilters,
+    request: RecommendRequest,
+) -> None:
+    visible_result, row_ids, signature = result_after_deletions(result)
+
+    st.subheader("推荐结果")
     col1, col2, col3 = st.columns(3)
-    col1.metric("筛选后数据", filtered_count)
-    col2.metric("数据不完整", incomplete_count)
-    col3.metric("推荐结果", len(result))
+    col1.metric("筛选后数据", filtered_count, border=True)
+    col2.metric("数据不完整", incomplete_count, border=True)
+    col3.metric("推荐结果", len(visible_result), border=True)
 
     if result.empty:
-        st.info("暂无符合当前条件和推荐阈值的结果。")
+        st.info("暂无符合当前条件的结果。")
+        return
+    if visible_result.empty:
+        st.info("推荐结果已全部删除。")
         return
 
-    st.dataframe(result, use_container_width=True, hide_index=True)
-    st.download_button(
-        "导出 Excel",
-        data=to_excel_bytes(result),
-        file_name="志愿推荐结果.xlsx",
-        mime=EXCEL_MIME,
+    editor_result = visible_result.copy()
+    editor_result.insert(0, "_志愿标识", row_ids)
+    editor_result.insert(0, "删除", False)
+    editor_key = f"result_editor_{signature}_{st.session_state.result_delete_version}"
+    edited_result = st.data_editor(
+        editor_result,
+        width="stretch",
+        height=520,
+        hide_index=True,
+        disabled=[column for column in editor_result.columns if column != "删除"],
+        column_config={
+            "删除": st.column_config.CheckboxColumn("删除", help="勾选不需要的志愿"),
+            "_志愿标识": None,
+        },
+        key=editor_key,
     )
+
+    selected_ids = edited_result.loc[edited_result["删除"], "_志愿标识"].tolist()
+    delete_column, _ = st.columns([1, 5])
+    if delete_column.button(
+        "删除选中志愿",
+        icon=":material/delete:",
+        disabled=not selected_ids,
+        width="stretch",
+    ):
+        st.session_state.deleted_result_ids = list(
+            set(st.session_state.deleted_result_ids).union(selected_ids)
+        )
+        st.session_state.result_delete_version += 1
+        st.rerun()
+
+    export_format = st.segmented_control(
+        "导出格式",
+        options=list(EXPORT_FORMATS),
+        default="Excel",
+        selection_mode="single",
+    )
+    export_format = export_format or "Excel"
+    extension, mime = EXPORT_FORMATS[export_format]
+    category = filters.skill_category or filters.art_category
+    export_stem = build_export_stem(
+        filters.first_choice,
+        category,
+        request.user_score,
+        request.user_rank,
+    )
+    file_name = f"{export_stem}.{extension}"
+    export_data = create_export(visible_result, export_format)
+
+    download_column, _ = st.columns([1, 5])
+    download_column.download_button(
+        f"导出 {export_format}",
+        data=export_data,
+        file_name=file_name,
+        mime=mime,
+        icon=":material/download:",
+        width="stretch",
+    )
+
+
+def result_after_deletions(result: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, str]:
+    signature = result_signature(result)
+    if st.session_state.get("result_signature") != signature:
+        st.session_state.result_signature = signature
+        st.session_state.deleted_result_ids = []
+        st.session_state.result_delete_version = 0
+
+    all_row_ids = result_row_ids(result)
+    deleted_ids = set(st.session_state.deleted_result_ids)
+    visible_mask = ~all_row_ids.isin(deleted_ids)
+    return (
+        result.loc[visible_mask].reset_index(drop=True),
+        all_row_ids.loc[visible_mask].reset_index(drop=True),
+        signature,
+    )
+
+
+def result_signature(result: pd.DataFrame) -> str:
+    hashes = pd.util.hash_pandas_object(result.astype(str), index=True)
+    return hashlib.sha256(hashes.values.tobytes()).hexdigest()[:16]
+
+
+def result_row_ids(result: pd.DataFrame) -> pd.Series:
+    hashes = pd.util.hash_pandas_object(result.astype(str), index=False)
+    return hashes.map(lambda value: f"{int(value):016x}")
 
 
 def available_batches(data: pd.DataFrame) -> list[str]:

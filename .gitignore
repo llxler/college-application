@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 .venv/
 bin/cloudflared

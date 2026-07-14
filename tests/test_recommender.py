@@ -5,6 +5,7 @@ import zipfile
 from io import BytesIO
 
 import pandas as pd
+from PIL import Image
 
 from admission_recommender import (
     CandidateFilters,
@@ -14,7 +15,12 @@ from admission_recommender import (
     recommend,
     subject_requirement_matches,
 )
-from admission_recommender.exporter import to_excel_bytes
+from admission_recommender.exporter import (
+    build_export_stem,
+    to_excel_bytes,
+    to_jpg_bytes,
+    to_pdf_bytes,
+)
 
 
 class RecommenderTests(unittest.TestCase):
@@ -110,6 +116,29 @@ class RecommenderTests(unittest.TestCase):
         self.assertGreater(len(exported), 1000)
         with zipfile.ZipFile(BytesIO(exported)) as archive:
             self.assertIn("xl/worksheets/sheet1.xml", archive.namelist())
+
+    def test_jpg_and_pdf_exports(self) -> None:
+        result = recommend(
+            pd.DataFrame([_sample_row("A", "测试学校", 590, 10500)]),
+            RecommendRequest(user_rank=10000, per_level_limit=1),
+        )
+        jpg = to_jpg_bytes(result)
+        pdf = to_pdf_bytes(result)
+
+        self.assertTrue(jpg.startswith(b"\xff\xd8"))
+        self.assertEqual(Image.open(BytesIO(jpg)).format, "JPEG")
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertGreater(len(pdf), 1000)
+
+    def test_export_filename_uses_subject_and_score(self) -> None:
+        self.assertEqual(
+            build_export_stem("物理", None, 476, 30000),
+            "志愿生成结果（首选物理476分）",
+        )
+        self.assertEqual(
+            build_export_stem(None, "计算机类", None, 1200),
+            "志愿生成结果（计算机类1200位）",
+        )
 
     def test_real_batch_counts_match_workbook(self) -> None:
         counts = self.data.groupby(["原始工作表"]).size().to_dict()
