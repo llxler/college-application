@@ -34,8 +34,35 @@ class RecommenderTests(unittest.TestCase):
         self.assertEqual(len(set(self.data["原始工作表"])), 10)
         self.assertIn("专业信息", self.data.columns)
         self.assertIn("院校专业组代号", self.data.columns)
+        self.assertIn("省份", self.data.columns)
         self.assertNotIn("专业", self.data.columns)
         self.assertNotIn("具体专业", self.data.columns)
+
+    def test_province_cleanup_and_filter(self) -> None:
+        junior = self.data[self.data["批次"] == "高职高专普通批"]
+        self.assertEqual(set(junior["省份"]), {"湖北省", "其他"})
+        self.assertEqual(int((junior["省份"] == "湖北省").sum()), 447)
+
+        hubei = filter_candidates(
+            self.data,
+            CandidateFilters(
+                batch="高职高专普通批",
+                selected_subjects=["化", "生", "地", "政"],
+                provinces=["湖北省"],
+            ),
+        )
+        other = filter_candidates(
+            self.data,
+            CandidateFilters(
+                batch="高职高专普通批",
+                selected_subjects=["化", "生", "地", "政"],
+                provinces=["其他"],
+            ),
+        )
+        self.assertEqual(len(hubei), 447)
+        self.assertEqual(len(other), 1520)
+        self.assertTrue((hubei["省份"] == "湖北省").all())
+        self.assertTrue((other["省份"] == "其他").all())
 
     def test_ignores_empty_art_columns(self) -> None:
         art = self.data[self.data["原始工作表"] == "艺术（本科）"]
@@ -161,7 +188,7 @@ class RecommenderTests(unittest.TestCase):
         self.assertEqual(counts["本科普通批（首选历史）"], 1384)
         self.assertEqual(counts["高职高专普通批（首选物理）"], 1059)
         self.assertEqual(counts["高职高专普通批（首选历史）"], 908)
-        self.assertEqual(counts["艺术（本科）"], 890)
+        self.assertEqual(counts["艺术（本科）"], 889)
 
     def test_common_batch_filter_dimensions(self) -> None:
         filters = CandidateFilters(

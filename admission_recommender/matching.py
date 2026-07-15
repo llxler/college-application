@@ -50,6 +50,9 @@ def filter_candidates(data: pd.DataFrame, filters: CandidateFilters) -> pd.DataF
     if filters.art_category:
         df = df[df["类别"] == filters.art_category]
 
+    if filters.provinces:
+        df = df[df["省份"].isin(filters.provinces)]
+
     keyword = (filters.major_keyword or "").strip()
     if keyword and "专业信息" in df.columns and df["专业信息"].notna().any():
         df = df[df["专业信息"].fillna("").str.contains(keyword, regex=False)]

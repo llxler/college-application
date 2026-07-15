@@ -125,6 +125,7 @@ def render_controls(
         elif batch_type == "艺术":
             art_category = st.selectbox("艺术类别", sorted(batch_data["类别"].dropna().unique()))
 
+        provinces = st.multiselect("省份", ["湖北省", "其他"])
         input_mode = st.segmented_control(
             "成绩录入方式",
             options=["分数", "位次"],
@@ -167,6 +168,7 @@ def render_controls(
         selected_subjects=selected_subjects,
         skill_category=skill_category,
         art_category=art_category,
+        provinces=provinces,
         major_keyword=major_keyword,
         school_natures=school_natures,
         exclude_remark_keywords=exclude_remark_keywords,

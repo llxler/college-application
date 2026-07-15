@@ -18,6 +18,7 @@ STANDARD_COLUMNS = [
     "专业成绩",
     "位次值",
     "专业信息",
+    "省份",
     "学校性质",
     "备注",
     "数据状态",
@@ -110,6 +111,11 @@ def clean_sheet_rows(rows: list[list[Any]], sheet_name: str) -> pd.DataFrame:
     if "类别" in df.columns:
         df["类别"] = df["类别"].replace({"组计算机类": "计算机类"})
 
+    if "省份" in df.columns:
+        df["省份"] = df["省份"].map(_province_group)
+    else:
+        df["省份"] = "其他"
+
     for column in ["投档最低分", "位次值", "专业成绩"]:
         if column in df.columns:
             df[column] = pd.to_numeric(df[column], errors="coerce")
@@ -138,6 +144,13 @@ def _display_track(df: pd.DataFrame) -> pd.Series:
     if batch_type in {"技能高考", "艺术"}:
         return df["类别"]
     return pd.Series([""] * len(df), index=df.index)
+
+
+def _province_group(value: Any) -> str:
+    if value is not None and not pd.isna(value):
+        if str(value).strip() in {"湖北", "湖北省"}:
+            return "湖北省"
+    return "其他"
 
 
 def _data_status(row: pd.Series) -> str:

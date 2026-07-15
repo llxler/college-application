@@ -11,6 +11,7 @@ class CandidateFilters:
     selected_subjects: Sequence[str] = field(default_factory=tuple)
     skill_category: str | None = None
     art_category: str | None = None
+    provinces: Sequence[str] = field(default_factory=tuple)
     major_keyword: str | None = None
     school_natures: Sequence[str] = field(default_factory=tuple)
     exclude_remark_keywords: Sequence[str] = field(default_factory=tuple)

@@ -22,6 +22,11 @@ class AppTests(unittest.TestCase):
         self.assertIn("位次差比例", app.markdown[0].value)
         self.assertIn("0.05", app.markdown[0].value)
 
+        province_filter = next(
+            item for item in app.sidebar.multiselect if item.label == "省份"
+        )
+        self.assertEqual(province_filter.options, ["湖北省", "其他"])
+
         score_input = next(item for item in app.sidebar.text_input if item.label == "用户总分")
         score_input.set_value("476")
         app.run(timeout=30)
