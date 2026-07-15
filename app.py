@@ -153,7 +153,11 @@ def render_controls(
                     )
             else:
                 user_score = entered_score
-        major_keyword = st.text_input("专业关键词（可选）").strip()
+        major_keyword = st.text_input(
+            "专业关键词（可选）",
+            placeholder="如：电子信息 人工智能（匹配任意一个）",
+            help="多个关键词可用空格、逗号、顿号、分号、竖线或斜杠分隔；匹配任意一个，英文不区分大小写。",
+        ).strip()
         school_natures = st.multiselect(
             "学校性质筛选",
             sorted(value for value in batch_data["学校性质"].dropna().unique() if value),

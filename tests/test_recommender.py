@@ -243,6 +243,59 @@ class RecommenderTests(unittest.TestCase):
         )
         self.assertEqual(len(with_keyword), len(without_keyword))
 
+    def test_multiple_major_keywords_match_any_term(self) -> None:
+        data = pd.DataFrame(
+            [
+                {"批次": "本科普通批", "专业信息": "电子信息工程技术"},
+                {"批次": "本科普通批", "专业信息": "人工智能技术应用"},
+                {"批次": "本科普通批", "专业信息": "护理"},
+            ]
+        )
+
+        for keywords in [
+            "电子信息 人工智能",
+            "电子信息，人工智能",
+            "电子信息、人工智能",
+            "电子信息/人工智能",
+        ]:
+            with self.subTest(keywords=keywords):
+                filtered = filter_candidates(
+                    data,
+                    CandidateFilters(batch="本科普通批", major_keyword=keywords),
+                )
+                self.assertEqual(
+                    list(filtered["专业信息"]),
+                    ["电子信息工程技术", "人工智能技术应用"],
+                )
+
+    def test_major_keywords_ignore_case_and_character_width(self) -> None:
+        data = pd.DataFrame(
+            [
+                {"批次": "本科普通批", "专业信息": "Artificial Intelligence"},
+                {"批次": "本科普通批", "专业信息": "ＣＯＭＰＵＴＥＲ科学"},
+                {"批次": "本科普通批", "专业信息": "护理"},
+            ]
+        )
+
+        filtered = filter_candidates(
+            data,
+            CandidateFilters(
+                batch="本科普通批",
+                major_keyword="artificial；computer；ＡＲＴＩＦＩＣＩＡＬ",
+            ),
+        )
+
+        self.assertEqual(
+            list(filtered["专业信息"]),
+            ["Artificial Intelligence", "ＣＯＭＰＵＴＥＲ科学"],
+        )
+
+        separator_only = filter_candidates(
+            data,
+            CandidateFilters(batch="本科普通批", major_keyword=" ，、； | / "),
+        )
+        self.assertEqual(len(separator_only), len(data))
+
     def test_remark_exclusion_uses_remark_and_school_nature(self) -> None:
         mini = pd.DataFrame(
             [

@@ -45,6 +45,12 @@ class AppTests(unittest.TestCase):
         )
         self.assertEqual(province_filter.options, ["湖北省", "其他"])
 
+        major_input = next(
+            item for item in app.sidebar.text_input if item.label == "专业关键词（可选）"
+        )
+        self.assertIn("匹配任意一个", major_input.proto.placeholder)
+        self.assertIn("英文不区分大小写", major_input.proto.help)
+
         score_input = next(item for item in app.sidebar.text_input if item.label == "用户总分")
         score_input.set_value("476")
         app.run(timeout=30)

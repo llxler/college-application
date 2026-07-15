@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Iterable
 
 import pandas as pd
@@ -8,6 +9,7 @@ import pandas as pd
 from .models import CandidateFilters
 
 SUBJECTS = ("化", "生", "地", "政")
+MAJOR_KEYWORD_SEPARATOR = re.compile(r"[\s,、;|/]+")
 
 
 def subject_requirement_matches(requirement: object, selected_subjects: Iterable[str]) -> bool:
@@ -55,9 +57,13 @@ def filter_candidates(data: pd.DataFrame, filters: CandidateFilters) -> pd.DataF
             df["省份"] = "其他"
         df = df[df["省份"].isin(filters.provinces)]
 
-    keyword = (filters.major_keyword or "").strip()
-    if keyword and "专业信息" in df.columns and df["专业信息"].notna().any():
-        df = df[df["专业信息"].fillna("").str.contains(keyword, regex=False)]
+    major_keywords = _major_keywords(filters.major_keyword)
+    if major_keywords and "专业信息" in df.columns and df["专业信息"].notna().any():
+        major_text = df["专业信息"].map(_normalize_search_text)
+        mask = pd.Series(False, index=df.index)
+        for keyword in major_keywords:
+            mask |= major_text.str.contains(keyword, regex=False)
+        df = df[mask]
 
     if filters.school_natures:
         df = df[df["学校性质"].isin(filters.school_natures)]
@@ -80,3 +86,20 @@ def _is_common_batch(df: pd.DataFrame) -> bool:
     if df.empty or "批次类型" not in df.columns:
         return False
     return bool((df["批次类型"] == "普通批").any())
+
+
+def _major_keywords(value: object) -> list[str]:
+    normalized = _normalize_search_text(value)
+    return list(
+        dict.fromkeys(
+            keyword
+            for keyword in MAJOR_KEYWORD_SEPARATOR.split(normalized)
+            if keyword
+        )
+    )
+
+
+def _normalize_search_text(value: object) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    return unicodedata.normalize("NFKC", str(value)).casefold()
