@@ -53,8 +53,8 @@ EXPORT_FORMATS = {
 
 
 @st.cache_data(show_spinner=False)
-def load_data() -> pd.DataFrame:
-    return load_workbook_data(DATA_PATH)
+def load_data(data_path: str, file_mtime_ns: int) -> pd.DataFrame:
+    return load_workbook_data(data_path)
 
 
 @st.cache_data(show_spinner=False)
@@ -89,7 +89,7 @@ def main() -> None:
         st.error(f"未找到数据文件：{DATA_PATH}")
         return
 
-    data = load_data()
+    data = load_data(str(DATA_PATH), DATA_PATH.stat().st_mtime_ns)
     if data.empty:
         st.error("Excel 数据为空或读取失败。")
         return

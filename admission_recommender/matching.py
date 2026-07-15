@@ -51,6 +51,8 @@ def filter_candidates(data: pd.DataFrame, filters: CandidateFilters) -> pd.DataF
         df = df[df["类别"] == filters.art_category]
 
     if filters.provinces:
+        if "省份" not in df.columns:
+            df["省份"] = "其他"
         df = df[df["省份"].isin(filters.provinces)]
 
     keyword = (filters.major_keyword or "").strip()

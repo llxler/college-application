@@ -1,11 +1,29 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
+import pandas as pd
 from streamlit.testing.v1 import AppTest
+
+import app as streamlit_app
 
 
 class AppTests(unittest.TestCase):
+    def test_data_cache_includes_workbook_mtime(self) -> None:
+        streamlit_app.load_data.clear()
+        with patch.object(
+            streamlit_app,
+            "load_workbook_data",
+            return_value=pd.DataFrame([{"批次": "测试批次"}]),
+        ) as loader:
+            streamlit_app.load_data("table.xlsx", 1)
+            streamlit_app.load_data("table.xlsx", 1)
+            streamlit_app.load_data("table.xlsx", 2)
+
+        self.assertEqual(loader.call_count, 2)
+        streamlit_app.load_data.clear()
+
     def test_rank_help_and_export_only_result_actions(self) -> None:
         app = AppTest.from_file("app.py").run(timeout=30)
         self.assertFalse(app.exception)

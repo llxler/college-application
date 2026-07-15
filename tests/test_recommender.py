@@ -64,6 +64,22 @@ class RecommenderTests(unittest.TestCase):
         self.assertTrue((hubei["省份"] == "湖北省").all())
         self.assertTrue((other["省份"] == "其他").all())
 
+    def test_province_filter_handles_legacy_data_without_column(self) -> None:
+        legacy_data = pd.DataFrame([{"批次": "体育本科"}, {"批次": "体育本科"}])
+
+        hubei = filter_candidates(
+            legacy_data,
+            CandidateFilters(batch="体育本科", provinces=["湖北省"]),
+        )
+        other = filter_candidates(
+            legacy_data,
+            CandidateFilters(batch="体育本科", provinces=["其他"]),
+        )
+
+        self.assertTrue(hubei.empty)
+        self.assertEqual(len(other), 2)
+        self.assertTrue((other["省份"] == "其他").all())
+
     def test_ignores_empty_art_columns(self) -> None:
         art = self.data[self.data["原始工作表"] == "艺术（本科）"]
         self.assertTrue(all(isinstance(column, str) for column in art.columns))
