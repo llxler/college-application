@@ -22,18 +22,29 @@ class AppTests(unittest.TestCase):
         self.assertIn("位次差比例", app.markdown[0].value)
         self.assertIn("0.05", app.markdown[0].value)
 
-        score_input = next(
-            item for item in app.sidebar.text_input if item.label == "用户总分（可选）"
-        )
+        score_input = next(item for item in app.sidebar.text_input if item.label == "用户总分")
         score_input.set_value("476")
         app.run(timeout=30)
         self.assertFalse(app.exception)
+        self.assertEqual(app.sidebar.metric[0].label, "自动换算位次")
+        self.assertEqual(app.sidebar.metric[0].value, "40,690")
 
         self.assertFalse(app.get("html"))
         self.assertEqual([item.label for item in app.button], ["删除选中志愿"])
         self.assertEqual(
             [item.label for item in app.get("download_button")],
             ["导出 Excel"],
+        )
+
+        input_mode = next(
+            item for item in app.sidebar.segmented_control if item.label == "成绩录入方式"
+        )
+        input_mode.set_value("位次")
+        app.run(timeout=30)
+        self.assertFalse(app.exception)
+        self.assertEqual(
+            [item.label for item in app.sidebar.text_input],
+            ["用户位次值", "专业关键词（可选）"],
         )
 
 

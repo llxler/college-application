@@ -11,7 +11,9 @@ from admission_recommender import (
     CandidateFilters,
     RecommendRequest,
     filter_candidates,
+    load_rank_data,
     load_workbook_data,
+    rank_for_score,
     recommend,
     subject_requirement_matches,
 )
@@ -116,6 +118,19 @@ class RecommenderTests(unittest.TestCase):
         self.assertGreater(len(exported), 1000)
         with zipfile.ZipFile(BytesIO(exported)) as archive:
             self.assertIn("xl/worksheets/sheet1.xml", archive.namelist())
+            sheet_xml = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+        self.assertIn("学校性质", sheet_xml)
+        for removed_column in ["备注", "分差", "位次差", "推荐理由"]:
+            self.assertNotIn(f">{removed_column}<", sheet_xml)
+
+    def test_rank_data_score_lookup(self) -> None:
+        rank_data = load_rank_data("rank.xlsx")
+        self.assertEqual(set(rank_data["首选科目"]), {"物理", "历史"})
+        self.assertEqual(rank_for_score(rank_data, "物理", 476), 123707)
+        self.assertEqual(rank_for_score(rank_data, "历史", 476), 40690)
+        self.assertEqual(rank_for_score(rank_data, "物理", 708), 21)
+        self.assertEqual(rank_for_score(rank_data, "历史", 679), 12)
+        self.assertIsNone(rank_for_score(rank_data, "物理", 149))
 
     def test_jpg_and_pdf_exports(self) -> None:
         result = recommend(

@@ -13,6 +13,19 @@ from PIL import Image, ImageDraw, ImageFont
 EXCEL_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PDF_MIME = "application/pdf"
 JPG_MIME = "image/jpeg"
+EXPORT_COLUMNS = [
+    "推荐档位",
+    "院校专业组代号",
+    "院校专业组名称",
+    "批次",
+    "首选科目或类别",
+    "再选科目要求",
+    "投档最低分",
+    "位次值",
+    "专业成绩",
+    "专业信息",
+    "学校性质",
+]
 
 _FONT_PATH = Path(__file__).parents[1] / "assets" / "NotoSansSC-Subset.ttf"
 _FONT_SIZE = 24
@@ -32,14 +45,11 @@ _COLUMN_LAYOUT = {
     "专业成绩": (160, 1),
     "专业信息": (560, 3),
     "学校性质": (150, 2),
-    "备注": (360, 3),
-    "分差": (100, 1),
-    "位次差": (130, 1),
-    "推荐理由": (700, 3),
 }
 
 
 def to_excel_bytes(result: pd.DataFrame) -> bytes:
+    result = _export_columns(result)
     clean_result = result.astype(object).where(pd.notna(result), "")
     rows = [list(clean_result.columns)] + clean_result.values.tolist()
     output = BytesIO()
@@ -54,6 +64,7 @@ def to_excel_bytes(result: pd.DataFrame) -> bytes:
 
 
 def to_jpg_bytes(result: pd.DataFrame) -> bytes:
+    result = _export_columns(result)
     image = _render_table_image(result, compact=len(result) > 100)
     output = BytesIO()
     image.save(output, format="JPEG", quality=90, optimize=True, progressive=True)
@@ -61,6 +72,7 @@ def to_jpg_bytes(result: pd.DataFrame) -> bytes:
 
 
 def to_pdf_bytes(result: pd.DataFrame) -> bytes:
+    result = _export_columns(result)
     page_count = max(math.ceil(len(result) / _PDF_ROWS_PER_PAGE), 1)
     pages: list[tuple[bytes, int, int]] = []
     for page_index in range(page_count):
@@ -95,6 +107,11 @@ def build_export_stem(
         details += f"{_format_number(user_rank)}位"
 
     return f"志愿生成结果（{details}）" if details else "志愿生成结果"
+
+
+def _export_columns(result: pd.DataFrame) -> pd.DataFrame:
+    columns = [column for column in EXPORT_COLUMNS if column in result.columns]
+    return result.loc[:, columns]
 
 
 def _render_table_image(result: pd.DataFrame, compact: bool = False) -> Image.Image:

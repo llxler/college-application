@@ -11,7 +11,9 @@ from admission_recommender import (
     RecommendRequest,
     RecommendThresholds,
     filter_candidates,
+    load_rank_data,
     load_workbook_data,
+    rank_for_score,
     recommend,
 )
 from admission_recommender.exporter import (
@@ -25,6 +27,7 @@ from admission_recommender.exporter import (
 )
 
 DATA_PATH = Path(__file__).with_name("table.xlsx")
+RANK_PATH = Path(__file__).with_name("rank.xlsx")
 BATCH_ORDER = [
     "本科普通批",
     "高职高专普通批",
@@ -52,6 +55,13 @@ EXPORT_FORMATS = {
 @st.cache_data(show_spinner=False)
 def load_data() -> pd.DataFrame:
     return load_workbook_data(DATA_PATH)
+
+
+@st.cache_data(show_spinner=False)
+def load_ranks() -> pd.DataFrame:
+    if not RANK_PATH.exists():
+        return pd.DataFrame(columns=["首选科目", "分数", "位次值"])
+    return load_rank_data(RANK_PATH)
 
 
 @st.cache_data(show_spinner=False)
@@ -84,7 +94,7 @@ def main() -> None:
         st.error("Excel 数据为空或读取失败。")
         return
 
-    filters, request, thresholds = render_controls(data)
+    filters, request, thresholds = render_controls(data, load_ranks())
     filtered = filter_candidates(data, filters)
     incomplete_count = int((filtered["数据状态"] == "数据不完整").sum())
 
@@ -92,7 +102,10 @@ def main() -> None:
     render_result(result, len(filtered), incomplete_count, filters, request)
 
 
-def render_controls(data: pd.DataFrame) -> tuple[CandidateFilters, RecommendRequest, RecommendThresholds]:
+def render_controls(
+    data: pd.DataFrame,
+    rank_data: pd.DataFrame,
+) -> tuple[CandidateFilters, RecommendRequest, RecommendThresholds]:
     with st.sidebar:
         st.header("筛选条件")
         batch = st.selectbox("报考批次", available_batches(data))
@@ -112,8 +125,33 @@ def render_controls(data: pd.DataFrame) -> tuple[CandidateFilters, RecommendRequ
         elif batch_type == "艺术":
             art_category = st.selectbox("艺术类别", sorted(batch_data["类别"].dropna().unique()))
 
-        user_score = parse_optional_number(st.text_input("用户总分（可选）"))
-        user_rank = parse_optional_number(st.text_input("用户位次值（可选）"))
+        input_mode = st.segmented_control(
+            "成绩录入方式",
+            options=["分数", "位次"],
+            default="分数",
+            selection_mode="single",
+        )
+        user_score = None
+        user_rank = None
+        if input_mode == "位次":
+            user_rank = parse_optional_number(st.text_input("用户位次值"))
+        else:
+            entered_score = parse_optional_number(st.text_input("用户总分"))
+            if entered_score is not None and first_choice:
+                converted_rank = rank_for_score(rank_data, first_choice, entered_score)
+                if converted_rank is None:
+                    st.error(f"rank.xlsx 暂无 {first_choice} {entered_score:g} 分对应的位次。")
+                else:
+                    user_score = entered_score
+                    user_rank = float(converted_rank)
+                    st.metric(
+                        "自动换算位次",
+                        f"{converted_rank:,}",
+                        help="根据 rank.xlsx 中对应科目的一分一段表换算。",
+                        border=True,
+                    )
+            else:
+                user_score = entered_score
         major_keyword = st.text_input("专业关键词（可选）").strip()
         school_natures = st.multiselect(
             "学校性质筛选",
