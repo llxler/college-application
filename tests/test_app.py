@@ -57,6 +57,29 @@ class AppTests(unittest.TestCase):
         self.assertIn("位次差比例", app.markdown[0].value)
         self.assertIn("0.05", app.markdown[0].value)
 
+        display_expander = next(
+            item for item in app.sidebar.expander if item.label == "显示设置"
+        )
+        self.assertFalse(display_expander.proto.expanded)
+        display_selector = next(
+            item
+            for item in display_expander.multiselect
+            if item.label == "结果显示列"
+        )
+        self.assertEqual(
+            display_selector.value,
+            [
+                "推荐档位",
+                "院校专业组代号",
+                "院校专业组名称",
+                "首选科目或类别",
+                "再选科目要求",
+                "位次值",
+                "专业信息",
+                "学校性质",
+            ],
+        )
+
         province_filter = next(
             item for item in app.sidebar.multiselect if item.label == "学校所在省份"
         )
@@ -96,6 +119,62 @@ class AppTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(app.sidebar.metric[0].label, "自动换算位次")
         self.assertEqual(app.sidebar.metric[0].value, "40,690")
+
+        displayed_columns = [
+            column
+            for column in app.dataframe[0].value.columns
+            if column != "_志愿标识"
+        ]
+        self.assertEqual(
+            displayed_columns,
+            [
+                "删除",
+                "推荐档位",
+                "院校专业组",
+                "院校专业组名称",
+                "首选科目",
+                "再选科目",
+                "位次值",
+                "专业信息",
+                "学校性质",
+            ],
+        )
+
+        display_expander = next(
+            item for item in app.sidebar.expander if item.label == "显示设置"
+        )
+        display_selector = next(
+            item
+            for item in display_expander.multiselect
+            if item.label == "结果显示列"
+        )
+        display_selector.set_value(["推荐档位", "投档最低分", "备注"])
+        app.run(timeout=30)
+        self.assertFalse(app.exception)
+        displayed_columns = [
+            column
+            for column in app.dataframe[0].value.columns
+            if column != "_志愿标识"
+        ]
+        self.assertEqual(displayed_columns, ["删除", "推荐档位", "投档最低分", "备注"])
+
+        display_expander = next(
+            item for item in app.sidebar.expander if item.label == "显示设置"
+        )
+        display_selector = next(
+            item
+            for item in display_expander.multiselect
+            if item.label == "结果显示列"
+        )
+        display_selector.set_value([])
+        app.run(timeout=30)
+        self.assertFalse(app.exception)
+        displayed_columns = [
+            column
+            for column in app.dataframe[0].value.columns
+            if column != "_志愿标识"
+        ]
+        self.assertEqual(displayed_columns, ["删除"])
 
         self.assertFalse(app.get("html"))
         self.assertEqual([item.label for item in app.button], ["删除选中志愿"])

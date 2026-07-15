@@ -25,6 +25,7 @@ from admission_recommender.exporter import (
     to_jpg_bytes,
     to_pdf_bytes,
 )
+from admission_recommender.recommendation import RESULT_COLUMNS
 
 DATA_PATH = Path(__file__).with_name("table.xlsx")
 RANK_PATH = Path(__file__).with_name("rank.xlsx")
@@ -49,6 +50,21 @@ EXPORT_FORMATS = {
     "Excel": ("xlsx", EXCEL_MIME),
     "PDF": ("pdf", PDF_MIME),
     "JPG": ("jpg", JPG_MIME),
+}
+DEFAULT_DISPLAY_COLUMNS = [
+    "推荐档位",
+    "院校专业组代号",
+    "院校专业组名称",
+    "首选科目或类别",
+    "再选科目要求",
+    "位次值",
+    "专业信息",
+    "学校性质",
+]
+DISPLAY_COLUMN_LABELS = {
+    "院校专业组代号": "院校专业组",
+    "首选科目或类别": "首选科目",
+    "再选科目要求": "再选科目",
 }
 
 
@@ -94,18 +110,30 @@ def main() -> None:
         st.error("Excel 数据为空或读取失败。")
         return
 
-    filters, request, thresholds = render_controls(data, load_ranks())
+    filters, request, thresholds, display_columns = render_controls(data, load_ranks())
     filtered = filter_candidates(data, filters)
     incomplete_count = int((filtered["数据状态"] == "数据不完整").sum())
 
     result = recommend(filtered, request, thresholds)
-    render_result(result, len(filtered), incomplete_count, filters, request)
+    render_result(
+        result,
+        len(filtered),
+        incomplete_count,
+        filters,
+        request,
+        display_columns,
+    )
 
 
 def render_controls(
     data: pd.DataFrame,
     rank_data: pd.DataFrame,
-) -> tuple[CandidateFilters, RecommendRequest, RecommendThresholds]:
+) -> tuple[
+    CandidateFilters,
+    RecommendRequest,
+    RecommendThresholds,
+    list[str],
+]:
     with st.sidebar:
         st.header("筛选条件")
         batch = st.selectbox("报考批次", available_batches(data))
@@ -189,6 +217,7 @@ def render_controls(
         exclude_remark_keywords = st.multiselect("备注排除", REMARK_EXCLUDE_OPTIONS)
         per_level_limit = int(st.number_input("每档推荐数量", min_value=1, max_value=100, value=10, step=1))
         thresholds = render_rank_threshold_controls()
+        display_columns = render_display_controls()
 
     filters = CandidateFilters(
         batch=batch,
@@ -207,7 +236,7 @@ def render_controls(
         user_rank=user_rank,
         per_level_limit=per_level_limit,
     )
-    return filters, request, thresholds
+    return filters, request, thresholds, display_columns
 
 
 def render_rank_threshold_controls() -> RecommendThresholds:
@@ -244,12 +273,24 @@ def render_rank_threshold_controls() -> RecommendThresholds:
     )
 
 
+def render_display_controls() -> list[str]:
+    with st.expander("显示设置"):
+        return st.multiselect(
+            "结果显示列",
+            options=RESULT_COLUMNS,
+            default=DEFAULT_DISPLAY_COLUMNS,
+            format_func=lambda column: DISPLAY_COLUMN_LABELS.get(column, column),
+            help="删除列始终显示；清空选择后，结果表将只显示删除列。",
+        )
+
+
 def render_result(
     result: pd.DataFrame,
     filtered_count: int,
     incomplete_count: int,
     filters: CandidateFilters,
     request: RecommendRequest,
+    display_columns: list[str],
 ) -> None:
     visible_result, row_ids, signature = result_after_deletions(result)
 
@@ -266,10 +307,21 @@ def render_result(
         st.info("推荐结果已全部删除。")
         return
 
-    editor_result = visible_result.copy()
+    selected_columns = [
+        column for column in display_columns if column in visible_result.columns
+    ]
+    editor_result = visible_result.loc[:, selected_columns].rename(
+        columns=DISPLAY_COLUMN_LABELS
+    )
     editor_result.insert(0, "_志愿标识", row_ids)
     editor_result.insert(0, "删除", False)
-    editor_key = f"result_editor_{signature}_{st.session_state.result_delete_version}"
+    display_signature = hashlib.sha256(
+        "\0".join(selected_columns).encode("utf-8")
+    ).hexdigest()[:8]
+    editor_key = (
+        f"result_editor_{signature}_{display_signature}_"
+        f"{st.session_state.result_delete_version}"
+    )
     edited_result = st.data_editor(
         editor_result,
         width="stretch",
