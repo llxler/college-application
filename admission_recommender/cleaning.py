@@ -9,6 +9,7 @@ import pandas as pd
 STANDARD_COLUMNS = [
     "院校专业组代号",
     "院校专业组名称",
+    "学校名称",
     "批次",
     "首选科目",
     "首选科目或类别",
@@ -18,7 +19,8 @@ STANDARD_COLUMNS = [
     "专业成绩",
     "位次值",
     "专业信息",
-    "省份",
+    "学校所在省份",
+    "学校所在城市",
     "学校性质",
     "备注",
     "数据状态",
@@ -38,6 +40,8 @@ def clean_header(value: Any) -> str | None:
         return "专业信息"
     if text == "院校专业组":
         return "院校专业组代号"
+    if text == "省份":
+        return "学校所在省份"
     return text
 
 
@@ -104,17 +108,21 @@ def clean_sheet_rows(rows: list[list[Any]], sheet_name: str) -> pd.DataFrame:
     df["批次类型"] = meta["批次类型"]
     df["首选科目"] = meta["首选科目"]
 
-    for column in ["再选科目要求", "类别", "学校性质", "备注", "专业信息"]:
+    for column in [
+        "再选科目要求",
+        "类别",
+        "学校名称",
+        "学校所在省份",
+        "学校所在城市",
+        "学校性质",
+        "备注",
+        "专业信息",
+    ]:
         if column in df.columns:
             df[column] = df[column].map(clean_cell)
 
     if "类别" in df.columns:
         df["类别"] = df["类别"].replace({"组计算机类": "计算机类"})
-
-    if "省份" in df.columns:
-        df["省份"] = df["省份"].map(_province_group)
-    else:
-        df["省份"] = "其他"
 
     for column in ["投档最低分", "位次值", "专业成绩"]:
         if column in df.columns:
@@ -144,13 +152,6 @@ def _display_track(df: pd.DataFrame) -> pd.Series:
     if batch_type in {"技能高考", "艺术"}:
         return df["类别"]
     return pd.Series([""] * len(df), index=df.index)
-
-
-def _province_group(value: Any) -> str:
-    if value is not None and not pd.isna(value):
-        if str(value).strip() in {"湖北", "湖北省"}:
-            return "湖北省"
-    return "其他"
 
 
 def _data_status(row: pd.Series) -> str:

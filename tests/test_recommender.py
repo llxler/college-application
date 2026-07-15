@@ -34,51 +34,43 @@ class RecommenderTests(unittest.TestCase):
         self.assertEqual(len(set(self.data["原始工作表"])), 10)
         self.assertIn("专业信息", self.data.columns)
         self.assertIn("院校专业组代号", self.data.columns)
-        self.assertIn("省份", self.data.columns)
+        self.assertIn("学校名称", self.data.columns)
+        self.assertIn("学校所在省份", self.data.columns)
+        self.assertIn("学校所在城市", self.data.columns)
         self.assertNotIn("专业", self.data.columns)
         self.assertNotIn("具体专业", self.data.columns)
 
-    def test_province_cleanup_and_filter(self) -> None:
+    def test_location_columns_and_filters(self) -> None:
         junior = self.data[self.data["批次"] == "高职高专普通批"]
-        self.assertEqual(set(junior["省份"]), {"湖北省", "其他"})
-        self.assertEqual(int((junior["省份"] == "湖北省").sum()), 447)
+        self.assertEqual(int((junior["学校所在省份"] == "湖北省").sum()), 549)
+        self.assertEqual(int((junior["学校所在城市"] == "武汉市").sum()), 329)
 
-        hubei = filter_candidates(
+        wuhan = filter_candidates(
             self.data,
             CandidateFilters(
                 batch="高职高专普通批",
                 selected_subjects=["化", "生", "地", "政"],
                 provinces=["湖北省"],
+                cities=["武汉市"],
             ),
         )
-        other = filter_candidates(
-            self.data,
-            CandidateFilters(
-                batch="高职高专普通批",
-                selected_subjects=["化", "生", "地", "政"],
-                provinces=["其他"],
-            ),
-        )
-        self.assertEqual(len(hubei), 447)
-        self.assertEqual(len(other), 1520)
-        self.assertTrue((hubei["省份"] == "湖北省").all())
-        self.assertTrue((other["省份"] == "其他").all())
+        self.assertEqual(len(wuhan), 329)
+        self.assertTrue((wuhan["学校所在省份"] == "湖北省").all())
+        self.assertTrue((wuhan["学校所在城市"] == "武汉市").all())
 
-    def test_province_filter_handles_legacy_data_without_column(self) -> None:
+    def test_location_filter_handles_data_without_location_columns(self) -> None:
         legacy_data = pd.DataFrame([{"批次": "体育本科"}, {"批次": "体育本科"}])
 
-        hubei = filter_candidates(
+        filtered = filter_candidates(
             legacy_data,
-            CandidateFilters(batch="体育本科", provinces=["湖北省"]),
-        )
-        other = filter_candidates(
-            legacy_data,
-            CandidateFilters(batch="体育本科", provinces=["其他"]),
+            CandidateFilters(
+                batch="体育本科",
+                provinces=["湖北省"],
+                cities=["武汉市"],
+            ),
         )
 
-        self.assertTrue(hubei.empty)
-        self.assertEqual(len(other), 2)
-        self.assertTrue((other["省份"] == "其他").all())
+        self.assertTrue(filtered.empty)
 
     def test_ignores_empty_art_columns(self) -> None:
         art = self.data[self.data["原始工作表"] == "艺术（本科）"]
@@ -204,7 +196,8 @@ class RecommenderTests(unittest.TestCase):
         self.assertEqual(counts["本科普通批（首选历史）"], 1384)
         self.assertEqual(counts["高职高专普通批（首选物理）"], 1059)
         self.assertEqual(counts["高职高专普通批（首选历史）"], 908)
-        self.assertEqual(counts["艺术（本科）"], 889)
+        self.assertEqual(counts["体育（本科）"], 128)
+        self.assertEqual(counts["艺术（本科）"], 890)
 
     def test_common_batch_filter_dimensions(self) -> None:
         filters = CandidateFilters(

@@ -125,7 +125,31 @@ def render_controls(
         elif batch_type == "艺术":
             art_category = st.selectbox("艺术类别", sorted(batch_data["类别"].dropna().unique()))
 
-        provinces = st.multiselect("省份", ["湖北省", "其他"])
+        location_data = batch_data
+        if first_choice:
+            location_data = location_data[location_data["首选科目"] == first_choice]
+        if skill_category:
+            location_data = location_data[location_data["类别"] == skill_category]
+        if art_category:
+            location_data = location_data[location_data["类别"] == art_category]
+
+        province_options = available_values(location_data, "学校所在省份")
+        provinces = st.multiselect(
+            "学校所在省份",
+            province_options,
+            placeholder="搜索或选择省份" if province_options else "当前批次暂无省份数据",
+            disabled=not province_options,
+        )
+        city_data = location_data
+        if provinces:
+            city_data = city_data[city_data["学校所在省份"].isin(provinces)]
+        city_options = available_values(city_data, "学校所在城市")
+        cities = st.multiselect(
+            "学校所在城市",
+            city_options,
+            placeholder="搜索或选择城市" if city_options else "当前批次暂无城市数据",
+            disabled=not city_options,
+        )
         input_mode = st.segmented_control(
             "成绩录入方式",
             options=["分数", "位次"],
@@ -173,6 +197,7 @@ def render_controls(
         skill_category=skill_category,
         art_category=art_category,
         provinces=provinces,
+        cities=cities,
         major_keyword=major_keyword,
         school_natures=school_natures,
         exclude_remark_keywords=exclude_remark_keywords,
@@ -333,6 +358,18 @@ def available_batches(data: pd.DataFrame) -> list[str]:
     ordered = [batch for batch in BATCH_ORDER if batch in existing]
     remaining = sorted(existing - set(ordered))
     return ordered + remaining
+
+
+def available_values(data: pd.DataFrame, column: str) -> list[str]:
+    if column not in data.columns:
+        return []
+    return sorted(
+        {
+            str(value).strip()
+            for value in data[column].dropna()
+            if str(value).strip()
+        }
+    )
 
 
 def parse_optional_number(value: str) -> float | None:

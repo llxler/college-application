@@ -24,6 +24,23 @@ class AppTests(unittest.TestCase):
         self.assertEqual(loader.call_count, 2)
         streamlit_app.load_data.clear()
 
+    def test_location_filters_disable_without_location_data(self) -> None:
+        app = AppTest.from_file("app.py").run(timeout=30)
+        batch = next(item for item in app.sidebar.selectbox if item.label == "报考批次")
+        batch.set_value("技能高考本科批")
+        app.run(timeout=30)
+
+        province_filter = next(
+            item for item in app.sidebar.multiselect if item.label == "学校所在省份"
+        )
+        city_filter = next(
+            item for item in app.sidebar.multiselect if item.label == "学校所在城市"
+        )
+        self.assertTrue(province_filter.disabled)
+        self.assertTrue(city_filter.disabled)
+        self.assertEqual(province_filter.options, [])
+        self.assertEqual(city_filter.options, [])
+
     def test_rank_help_and_export_only_result_actions(self) -> None:
         app = AppTest.from_file("app.py").run(timeout=30)
         self.assertFalse(app.exception)
@@ -41,9 +58,31 @@ class AppTests(unittest.TestCase):
         self.assertIn("0.05", app.markdown[0].value)
 
         province_filter = next(
-            item for item in app.sidebar.multiselect if item.label == "省份"
+            item for item in app.sidebar.multiselect if item.label == "学校所在省份"
         )
-        self.assertEqual(province_filter.options, ["湖北省", "其他"])
+        self.assertIn("湖北省", province_filter.options)
+        self.assertIn("北京市", province_filter.options)
+
+        city_filter = next(
+            item for item in app.sidebar.multiselect if item.label == "学校所在城市"
+        )
+        self.assertIn("武汉市", city_filter.options)
+        self.assertIn("北京市", city_filter.options)
+
+        city_filter.set_value(["北京市"])
+        app.run(timeout=30)
+        province_filter = next(
+            item for item in app.sidebar.multiselect if item.label == "学校所在省份"
+        )
+        province_filter.set_value(["湖北省"])
+        app.run(timeout=30)
+        self.assertFalse(app.exception)
+        city_filter = next(
+            item for item in app.sidebar.multiselect if item.label == "学校所在城市"
+        )
+        self.assertEqual(city_filter.value, [])
+        self.assertIn("武汉市", city_filter.options)
+        self.assertNotIn("北京市", city_filter.options)
 
         major_input = next(
             item for item in app.sidebar.text_input if item.label == "专业关键词（可选）"

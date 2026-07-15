@@ -53,9 +53,17 @@ def filter_candidates(data: pd.DataFrame, filters: CandidateFilters) -> pd.DataF
         df = df[df["类别"] == filters.art_category]
 
     if filters.provinces:
-        if "省份" not in df.columns:
-            df["省份"] = "其他"
-        df = df[df["省份"].isin(filters.provinces)]
+        province_column = _location_column(df, "学校所在省份", "省份")
+        if province_column:
+            df = df[df[province_column].isin(filters.provinces)]
+        else:
+            df = df.iloc[0:0]
+
+    if filters.cities:
+        if "学校所在城市" in df.columns:
+            df = df[df["学校所在城市"].isin(filters.cities)]
+        else:
+            df = df.iloc[0:0]
 
     major_keywords = _major_keywords(filters.major_keyword)
     if major_keywords and "专业信息" in df.columns and df["专业信息"].notna().any():
@@ -86,6 +94,18 @@ def _is_common_batch(df: pd.DataFrame) -> bool:
     if df.empty or "批次类型" not in df.columns:
         return False
     return bool((df["批次类型"] == "普通批").any())
+
+
+def _location_column(
+    df: pd.DataFrame,
+    column: str,
+    legacy_column: str,
+) -> str | None:
+    if column in df.columns:
+        return column
+    if legacy_column in df.columns:
+        return legacy_column
+    return None
 
 
 def _major_keywords(value: object) -> list[str]:
